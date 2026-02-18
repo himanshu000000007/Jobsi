@@ -3,26 +3,25 @@ import { useSelector } from 'react-redux';
 import Navbar  from '../../components/Layout/Navbar';
 import Sidebar from '../../components/Layout/Sidebar';
 import api     from '../../services/api';
-import { API_ENDPOINTS } from '../../utils/constants';
+import { FaUsers, FaBriefcase, FaFileAlt, FaSpinner } from 'react-icons/fa';
 
-const AdminDashboard = () => {
-  const { user }       = useSelector((state) => state.auth);
+const AdminAnalyticsPage = () => {
+  const { user }           = useSelector((state) => state.auth);
   const [analytics, setAnalytics] = useState(null);
   const [loading,   setLoading]   = useState(true);
-  const [error,     setError]     = useState(null); // FIX: error state added
+  const [error,     setError]     = useState(null);
 
-  useEffect(() => {
-    fetchAnalytics();
-  }, []);
+  useEffect(() => { fetchAnalytics(); }, []);
 
   const fetchAnalytics = async () => {
     try {
       setError(null);
-      const response = await api.get(API_ENDPOINTS.ADMIN_ANALYTICS);
+      setLoading(true);
+      const response = await api.get('/admin/analytics');
       setAnalytics(response.data.analytics);
     } catch (err) {
-      // FIX: show error UI instead of silently failing with blank page
       setError('Failed to load analytics. Please try again.');
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -31,26 +30,30 @@ const AdminDashboard = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navbar />
-
       <div className="flex">
         <Sidebar role={user?.role} />
 
         <main className="flex-1 p-8">
           <div className="max-w-7xl mx-auto">
-            <h1 className="text-3xl font-bold text-gray-800 mb-8">Admin Dashboard</h1>
+            <div className="flex justify-between items-center mb-8">
+              <h1 className="text-3xl font-bold text-gray-800">Analytics Dashboard</h1>
+              <button 
+                onClick={fetchAnalytics} 
+                className="text-sm bg-white border border-gray-300 text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 transition"
+              >
+                🔄 Refresh
+              </button>
+            </div>
 
             {loading ? (
-              <div className="text-center py-16">
+              <div className="text-center py-20">
+                <FaSpinner className="animate-spin text-blue-600 mx-auto mb-4" size={32} />
                 <p className="text-gray-500">Loading analytics...</p>
               </div>
             ) : error ? (
-              /* FIX: Error UI */
-              <div className="bg-red-50 border border-red-200 rounded-xl p-8 text-center">
-                <p className="text-red-600 font-medium mb-4">{error}</p>
-                <button
-                  onClick={() => { setLoading(true); fetchAnalytics(); }}
-                  className="bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 transition"
-                >
+              <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+                <p className="text-red-600 mb-3">{error}</p>
+                <button onClick={fetchAnalytics} className="bg-red-600 text-white px-5 py-2 rounded-lg hover:bg-red-700 transition">
                   Retry
                 </button>
               </div>
@@ -59,19 +62,37 @@ const AdminDashboard = () => {
                 {/* User Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
                   <div className="bg-blue-50 rounded-xl shadow p-6">
-                    <p className="text-gray-500 text-sm mb-1">Total Users</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-600 text-sm font-medium">Total Users</p>
+                      <FaUsers className="text-blue-500" size={24} />
+                    </div>
                     <p className="text-3xl font-bold text-blue-600">{analytics?.users?.total || 0}</p>
                   </div>
+                  
                   <div className="bg-green-50 rounded-xl shadow p-6">
-                    <p className="text-gray-500 text-sm mb-1">Job Seekers</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-600 text-sm font-medium">Job Seekers</p>
+                      <FaUsers className="text-green-500" size={24} />
+                    </div>
                     <p className="text-3xl font-bold text-green-600">{analytics?.users?.jobSeekers || 0}</p>
                   </div>
+                  
                   <div className="bg-purple-50 rounded-xl shadow p-6">
-                    <p className="text-gray-500 text-sm mb-1">Recruiters</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-600 text-sm font-medium">Recruiters</p>
+                      <FaUsers className="text-purple-500" size={24} />
+                    </div>
                     <p className="text-3xl font-bold text-purple-600">{analytics?.users?.recruiters || 0}</p>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {analytics?.users?.approvedRecruiters || 0} approved
+                    </p>
                   </div>
+                  
                   <div className="bg-orange-50 rounded-xl shadow p-6">
-                    <p className="text-gray-500 text-sm mb-1">Pending Approvals</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-600 text-sm font-medium">Pending Approvals</p>
+                      <FaUsers className="text-orange-500" size={24} />
+                    </div>
                     <p className="text-3xl font-bold text-orange-600">{analytics?.users?.pendingRecruiters || 0}</p>
                   </div>
                 </div>
@@ -79,15 +100,26 @@ const AdminDashboard = () => {
                 {/* Job Stats */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
                   <div className="bg-white rounded-xl shadow p-6">
-                    <p className="text-gray-500 text-sm mb-1">Total Jobs</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-600 text-sm font-medium">Total Jobs</p>
+                      <FaBriefcase className="text-blue-500" size={24} />
+                    </div>
                     <p className="text-3xl font-bold text-blue-600">{analytics?.jobs?.total || 0}</p>
                   </div>
+                  
                   <div className="bg-white rounded-xl shadow p-6">
-                    <p className="text-gray-500 text-sm mb-1">Active Jobs</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-600 text-sm font-medium">Active Jobs</p>
+                      <FaBriefcase className="text-green-500" size={24} />
+                    </div>
                     <p className="text-3xl font-bold text-green-600">{analytics?.jobs?.active || 0}</p>
                   </div>
+                  
                   <div className="bg-white rounded-xl shadow p-6">
-                    <p className="text-gray-500 text-sm mb-1">Total Applications</p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-gray-600 text-sm font-medium">Total Applications</p>
+                      <FaFileAlt className="text-purple-500" size={24} />
+                    </div>
                     <p className="text-3xl font-bold text-purple-600">{analytics?.applications?.total || 0}</p>
                   </div>
                 </div>
@@ -95,7 +127,7 @@ const AdminDashboard = () => {
                 {/* Recent Activity */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div className="bg-white rounded-xl shadow p-6">
-                    <h3 className="text-lg font-semibold mb-4">Recent Users</h3>
+                    <h3 className="text-lg font-semibold mb-4 text-gray-800">Recent Users</h3>
                     <div className="space-y-3">
                       {analytics?.recent?.users?.length > 0 ? (
                         analytics.recent.users.map((u) => (
@@ -104,7 +136,9 @@ const AdminDashboard = () => {
                               <p className="font-medium text-gray-800">{u.name}</p>
                               <p className="text-sm text-gray-500">{u.email}</p>
                             </div>
-                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">{u.role}</span>
+                            <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                              {u.role}
+                            </span>
                           </div>
                         ))
                       ) : (
@@ -114,7 +148,7 @@ const AdminDashboard = () => {
                   </div>
 
                   <div className="bg-white rounded-xl shadow p-6">
-                    <h3 className="text-lg font-semibold mb-4">Recent Jobs</h3>
+                    <h3 className="text-lg font-semibold mb-4 text-gray-800">Recent Jobs</h3>
                     <div className="space-y-3">
                       {analytics?.recent?.jobs?.length > 0 ? (
                         analytics.recent.jobs.map((job) => (
@@ -138,4 +172,4 @@ const AdminDashboard = () => {
   );
 };
 
-export default AdminDashboard;
+export default AdminAnalyticsPage;

@@ -1,404 +1,278 @@
-const Post = require('../models/Post');
-const Comment = require('../models/Comment');
-const Like = require('../models/Like');
+// backend/controllers/postController.js
+// FIXED: Aligned with Post.js model which uses:
+//   - author (not userId)
+//   - likes: [ObjectId]  (array, no separate Like model)
+//   - comments: embedded subdocuments with 'user' field (no separate Comment model)
+//   - image: String (single)
+//   - NO isActive field
+//   - NO likesCount / commentsCount (computed from arrays)
+
+const Post       = require('../models/Post');
 const cloudinary = require('../config/cloudinary');
 
-// @desc    Create a new post
-// @route   POST /api/posts
-// @access  Private
+// ─── @desc   Create a new post
+// ─── @route  POST /api/posts
+// ─── @access Private
 exports.createPost = async (req, res) => {
   try {
     const { content } = req.body;
-    let images = [];
+    let image = null;
 
-    // Handle image uploads if present
     if (req.files && req.files.length > 0) {
-      const uploadPromises = req.files.map((file) => {
-        return new Promise((resolve, reject) => {
-          const uploadStream = cloudinary.uploader.upload_stream(
-            {
-              folder: 'job-portal/posts',
-              resource_type: 'auto',
-            },
-            (error, result) => {
-              if (error) reject(error);
-              else resolve(result.secure_url);
-            }
-          );
-          uploadStream.end(file.buffer);
-        });
+      image = await new Promise((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          { folder: 'job-portal/posts', resource_type: 'auto' },
+          (err, result) => (err ? reject(err) : resolve(result.secure_url))
+        );
+        stream.end(req.files[0].buffer);
       });
-
-      images = await Promise.all(uploadPromises);
     }
 
-    const post = await Post.create({
-      userId: req.user._id,
-      content,
-      images,
-    });
+    const post = await Post.create({ author: req.user._id, content, image });
 
-    const populatedPost = await Post.findById(post._id).populate(
-      'userId',
-      'name profilePicture companyName role'
-    );
+    const populated = await Post.findById(post._id)
+      .populate('author', 'name avatar companyName role');
 
+    const obj = populated.toObject();
     res.status(201).json({
       success: true,
       message: 'Post created successfully',
-      post: populatedPost,
+      post: { ...obj, isLiked: false, likesCount: 0, commentsCount: 0 },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get all posts (feed)
-// @route   GET /api/posts
-// @access  Private
+// ─── @desc   Get all posts (feed)
+// ─── @route  GET /api/posts?page=1&limit=10
+// ─── @access Private
 exports.getAllPosts = async (req, res) => {
   try {
-    const { page = 1, limit = 10 } = req.query;
+    const page  = parseInt(req.query.page)  || 1;
+    const limit = parseInt(req.query.limit) || 10;
 
-    const posts = await Post.find({ isActive: true })
-      .populate('userId', 'name profilePicture companyName role')
+    const posts = await Post.find()
+      .populate('author',        'name avatar companyName role')
+      .populate('comments.user', 'name avatar role')
       .sort({ createdAt: -1 })
-      .limit(limit * 1)
       .skip((page - 1) * limit)
-      .exec();
+      .limit(limit);
 
-    // Check if current user liked each post
-    const postsWithLikeStatus = await Promise.all(
-      posts.map(async (post) => {
-        const liked = await Like.findOne({
-          postId: post._id,
-          userId: req.user._id,
-        });
-        return {
-          ...post.toObject(),
-          isLiked: !!liked,
-        };
-      })
-    );
+    const total         = await Post.countDocuments();
+    const currentUserId = req.user._id.toString();
 
-    const count = await Post.countDocuments({ isActive: true });
+    const formatted = posts.map((post) => {
+      const obj = post.toObject();
+      return {
+        ...obj,
+        isLiked:       obj.likes?.some((id) => id.toString() === currentUserId) || false,
+        likesCount:    obj.likes?.length    || 0,
+        commentsCount: obj.comments?.length || 0,
+      };
+    });
 
     res.status(200).json({
-      success: true,
-      posts: postsWithLikeStatus,
-      totalPages: Math.ceil(count / limit),
-      currentPage: page,
-      total: count,
+      success: true, posts: formatted,
+      totalPages: Math.ceil(total / limit), currentPage: page, total,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get single post
-// @route   GET /api/posts/:id
-// @access  Private
+// ─── @desc   Get single post
+// ─── @route  GET /api/posts/:id
+// ─── @access Private
 exports.getPostById = async (req, res) => {
   try {
-    const post = await Post.findById(req.params.id).populate(
-      'userId',
-      'name profilePicture companyName role'
-    );
+    const post = await Post.findById(req.params.id)
+      .populate('author',        'name avatar companyName role')
+      .populate('comments.user', 'name avatar role');
 
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Post not found',
-      });
-    }
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
 
+    const obj           = post.toObject();
+    const currentUserId = req.user._id.toString();
     res.status(200).json({
       success: true,
-      post,
+      post: {
+        ...obj,
+        isLiked:       obj.likes?.some((id) => id.toString() === currentUserId) || false,
+        likesCount:    obj.likes?.length    || 0,
+        commentsCount: obj.comments?.length || 0,
+      },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Update post
-// @route   PUT /api/posts/:id
-// @access  Private
+// ─── @desc   Update post
+// ─── @route  PUT /api/posts/:id
+// ─── @access Private
 exports.updatePost = async (req, res) => {
   try {
-    let post = await Post.findById(req.params.id);
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+    if (post.author.toString() !== req.user._id.toString())
+      return res.status(403).json({ success: false, message: 'Not authorized' });
 
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Post not found',
-      });
-    }
+    const updated = await Post.findByIdAndUpdate(
+      req.params.id, { content: req.body.content }, { new: true, runValidators: true }
+    ).populate('author', 'name avatar companyName role')
+     .populate('comments.user', 'name avatar role');
 
-    // Check if user is the owner
-    if (post.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to update this post',
-      });
-    }
-
-    post = await Post.findByIdAndUpdate(req.params.id, req.body, {
-      new: true,
-      runValidators: true,
-    }).populate('userId', 'name profilePicture companyName role');
-
+    const obj           = updated.toObject();
+    const currentUserId = req.user._id.toString();
     res.status(200).json({
-      success: true,
-      message: 'Post updated successfully',
-      post,
+      success: true, message: 'Post updated successfully',
+      post: {
+        ...obj,
+        isLiked:       obj.likes?.some((id) => id.toString() === currentUserId) || false,
+        likesCount:    obj.likes?.length    || 0,
+        commentsCount: obj.comments?.length || 0,
+      },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Delete post
-// @route   DELETE /api/posts/:id
-// @access  Private
+// ─── @desc   Delete post
+// ─── @route  DELETE /api/posts/:id
+// ─── @access Private
 exports.deletePost = async (req, res) => {
   try {
     const post = await Post.findById(req.params.id);
-
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Post not found',
-      });
-    }
-
-    // Check if user is the owner
-    if (post.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this post',
-      });
-    }
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
+    if (post.author.toString() !== req.user._id.toString())
+      return res.status(403).json({ success: false, message: 'Not authorized' });
 
     await Post.findByIdAndDelete(req.params.id);
-
-    // Delete associated comments and likes
-    await Comment.deleteMany({ postId: req.params.id });
-    await Like.deleteMany({ postId: req.params.id });
-
-    res.status(200).json({
-      success: true,
-      message: 'Post deleted successfully',
-    });
+    // No separate Comment/Like collections — everything embedded in Post
+    res.status(200).json({ success: true, message: 'Post deleted successfully' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Like/Unlike a post
-// @route   POST /api/posts/:id/like
-// @access  Private
+// ─── @desc   Like / Unlike a post
+// ─── @route  POST /api/posts/:id/like
+// ─── @access Private
 exports.toggleLike = async (req, res) => {
   try {
-    const postId = req.params.id;
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
 
-    // Check if post exists
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Post not found',
-      });
-    }
+    const userId       = req.user._id;
+    const alreadyLiked = post.likes.some((id) => id.toString() === userId.toString());
 
-    // Check if already liked
-    const existingLike = await Like.findOne({
-      postId,
-      userId: req.user._id,
-    });
-
-    if (existingLike) {
-      // Unlike
-      await Like.findByIdAndDelete(existingLike._id);
-      await Post.findByIdAndUpdate(postId, {
-        $inc: { likesCount: -1 },
-      });
-
-      res.status(200).json({
-        success: true,
-        message: 'Post unliked',
-        isLiked: false,
-      });
+    if (alreadyLiked) {
+      post.likes = post.likes.filter((id) => id.toString() !== userId.toString());
     } else {
-      // Like
-      await Like.create({
-        postId,
-        userId: req.user._id,
-      });
-      await Post.findByIdAndUpdate(postId, {
-        $inc: { likesCount: 1 },
-      });
-
-      res.status(200).json({
-        success: true,
-        message: 'Post liked',
-        isLiked: true,
-      });
+      post.likes.push(userId);
     }
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
+    await post.save();
+
+    res.status(200).json({
+      success: true, message: alreadyLiked ? 'Post unliked' : 'Post liked',
+      isLiked: !alreadyLiked, likesCount: post.likes.length,
     });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Add comment to post
-// @route   POST /api/posts/:id/comments
-// @access  Private
+// ─── @desc   Add comment to post
+// ─── @route  POST /api/posts/:id/comments
+// ─── @access Private
 exports.addComment = async (req, res) => {
   try {
     const { content } = req.body;
-    const postId = req.params.id;
+    if (!content?.trim())
+      return res.status(400).json({ success: false, message: 'Comment content is required' });
 
-    // Check if post exists
-    const post = await Post.findById(postId);
-    if (!post) {
-      return res.status(404).json({
-        success: false,
-        message: 'Post not found',
-      });
-    }
+    const post = await Post.findById(req.params.id);
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
 
-    const comment = await Comment.create({
-      postId,
-      userId: req.user._id,
-      content,
-    });
+    // Embedded subdocument — field is 'user' not 'userId'
+    post.comments.push({ user: req.user._id, content: content.trim() });
+    await post.save();
 
-    // Update comments count
-    await Post.findByIdAndUpdate(postId, {
-      $inc: { commentsCount: 1 },
-    });
+    const updated      = await Post.findById(post._id).populate('comments.user', 'name avatar role');
+    const addedComment = updated.comments[updated.comments.length - 1];
 
-    const populatedComment = await Comment.findById(comment._id).populate(
-      'userId',
-      'name profilePicture role'
-    );
-
-    res.status(201).json({
-      success: true,
-      message: 'Comment added successfully',
-      comment: populatedComment,
-    });
+    res.status(201).json({ success: true, message: 'Comment added successfully', comment: addedComment });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get comments for a post
-// @route   GET /api/posts/:id/comments
-// @access  Private
+// ─── @desc   Get comments for a post
+// ─── @route  GET /api/posts/:id/comments
+// ─── @access Private
 exports.getComments = async (req, res) => {
   try {
-    const comments = await Comment.find({ postId: req.params.id })
-      .populate('userId', 'name profilePicture role')
-      .sort({ createdAt: -1 });
+    const post = await Post.findById(req.params.id).populate('comments.user', 'name avatar role');
+    if (!post) return res.status(404).json({ success: false, message: 'Post not found' });
 
     res.status(200).json({
-      success: true,
-      count: comments.length,
-      comments,
+      success: true, count: post.comments.length,
+      comments: [...post.comments].reverse(),   // newest first
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Delete comment
-// @route   DELETE /api/posts/comments/:id
-// @access  Private
+// ─── @desc   Delete comment
+// ─── @route  DELETE /api/posts/comments/:id
+// ─── @access Private
 exports.deleteComment = async (req, res) => {
   try {
-    const comment = await Comment.findById(req.params.id);
+    const post = await Post.findOne({ 'comments._id': req.params.id });
+    if (!post) return res.status(404).json({ success: false, message: 'Comment not found' });
 
-    if (!comment) {
-      return res.status(404).json({
-        success: false,
-        message: 'Comment not found',
-      });
-    }
+    const comment = post.comments.id(req.params.id);
+    if (!comment) return res.status(404).json({ success: false, message: 'Comment not found' });
 
-    // Check if user is the owner
-    if (comment.userId.toString() !== req.user._id.toString()) {
-      return res.status(403).json({
-        success: false,
-        message: 'Not authorized to delete this comment',
-      });
-    }
+    // Ownership check uses 'user' not 'userId'
+    if (comment.user.toString() !== req.user._id.toString())
+      return res.status(403).json({ success: false, message: 'Not authorized' });
 
-    const postId = comment.postId;
-    await Comment.findByIdAndDelete(req.params.id);
+    post.comments.pull({ _id: req.params.id });
+    await post.save();
 
-    // Update comments count
-    await Post.findByIdAndUpdate(postId, {
-      $inc: { commentsCount: -1 },
-    });
-
-    res.status(200).json({
-      success: true,
-      message: 'Comment deleted successfully',
-    });
+    res.status(200).json({ success: true, message: 'Comment deleted successfully' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
-// @desc    Get user's posts
-// @route   GET /api/posts/user/:userId
-// @access  Private
+// ─── @desc   Get user's posts
+// ─── @route  GET /api/posts/user/:userId
+// ─── @access Private
 exports.getUserPosts = async (req, res) => {
   try {
-    const posts = await Post.find({
-      userId: req.params.userId,
-      isActive: true,
-    })
-      .populate('userId', 'name profilePicture companyName role')
+    const posts = await Post.find({ author: req.params.userId })
+      .populate('author',        'name avatar companyName role')
+      .populate('comments.user', 'name avatar role')
       .sort({ createdAt: -1 });
 
-    res.status(200).json({
-      success: true,
-      count: posts.length,
-      posts,
+    const currentUserId = req.user._id.toString();
+    const formatted = posts.map((post) => {
+      const obj = post.toObject();
+      return {
+        ...obj,
+        isLiked:       obj.likes?.some((id) => id.toString() === currentUserId) || false,
+        likesCount:    obj.likes?.length    || 0,
+        commentsCount: obj.comments?.length || 0,
+      };
     });
+
+    res.status(200).json({ success: true, count: posts.length, posts: formatted });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

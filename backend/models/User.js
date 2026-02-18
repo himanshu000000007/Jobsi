@@ -23,10 +23,12 @@ const userSchema = new mongoose.Schema(
       minlength: 6,
     },
     role: {
-      type: String,
-      enum: ['jobseeker', 'recruiter', 'admin'],
-      default: 'jobseeker',
-    },
+  type: String,
+  enum: ['jobseeker', 'recruiter', 'admin'],
+  default: 'jobseeker',
+  // ✅ Always lowercase store karo
+  set: (val) => val?.toLowerCase(),
+},
     
     // Common profile fields
     phone: {
@@ -78,10 +80,10 @@ const userSchema = new mongoose.Schema(
     },
 
     // Recruiter specific fields
-    companyName: {
-      type: String,
-      trim: true,
-    },
+ companyName: {
+  type: String,
+  required: function() { return this.role === 'RECRUITER'; },
+},
     companyWebsite: {
       type: String,
       trim: true,
@@ -95,6 +97,15 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+
+companyLogo: {              // ← ADD THIS
+  type: String,
+  default: null,
+},
+companyDescription: {
+  type: String,
+},
+
 
     // Account status
     isActive: {

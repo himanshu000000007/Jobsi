@@ -1,157 +1,187 @@
+// frontend/src/redux/slices/feedSlice.js
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import feedService from '../../services/feedService';
 
-// Async thunks
+// ─── Thunks ───────────────────────────────────────────────────────────────────
+
 export const fetchPosts = createAsyncThunk(
   'feed/fetchPosts',
-  async (_, { rejectWithValue }) => {
+  async (page = 1, thunkAPI) => {
     try {
-      const response = await feedService.getPosts();
-      return response.data;
+      return await feedService.getPosts(page);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch posts');
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
 export const createPost = createAsyncThunk(
   'feed/createPost',
-  async (postData, { rejectWithValue }) => {
+  async (postData, thunkAPI) => {
     try {
-      const response = await feedService.createPost(postData);
-      return response.data;
+      return await feedService.createPost(postData);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create post');
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
 export const deletePost = createAsyncThunk(
   'feed/deletePost',
-  async (postId, { rejectWithValue }) => {
+  async (postId, thunkAPI) => {
     try {
       await feedService.deletePost(postId);
       return postId;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete post');
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
 export const toggleLike = createAsyncThunk(
   'feed/toggleLike',
-  async (postId, { rejectWithValue }) => {
+  async (postId, thunkAPI) => {
     try {
-      const response = await feedService.toggleLike(postId);
-      return response.data;
+      return await feedService.toggleLike(postId);
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to toggle like');
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
 export const addComment = createAsyncThunk(
   'feed/addComment',
-  async ({ postId, content }, { rejectWithValue }) => {
+  async ({ postId, content }, thunkAPI) => {
     try {
-      const response = await feedService.addComment(postId, { content });
-      return { postId, comment: response.data };
+      const data = await feedService.addComment(postId, content);
+      return { postId, comment: data.comment || data };
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to add comment');
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
-export const deleteComment = createAsyncThunk(
-  'feed/deleteComment',
-  async ({ postId, commentId }, { rejectWithValue }) => {
+export const fetchComments = createAsyncThunk(
+  'feed/fetchComments',
+  async (postId, thunkAPI) => {
     try {
-      await feedService.deleteComment(postId, commentId);
-      return { postId, commentId };
+      const data = await feedService.getComments(postId);
+      return { postId, comments: data.comments || data };
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete comment');
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
-// Initial state
-const initialState = {
-  posts: [],
-  loading: false,
-  error: null,
-};
-
-// Slice
+// ─── Slice ────────────────────────────────────────────────────────────────────
 const feedSlice = createSlice({
   name: 'feed',
-  initialState,
+  initialState: {
+    posts:      [],
+    loading:    false,
+    error:      null,
+    hasMore:    true,
+    page:       1,
+    creating:   false,
+  },
   reducers: {
+    resetFeed: (state) => {
+      state.posts   = [];
+      state.page    = 1;
+      state.hasMore = true;
+      state.error   = null;
+    },
     clearError: (state) => {
       state.error = null;
     },
   },
   extraReducers: (builder) => {
     builder
-      // Fetch Posts
+      // fetchPosts
       .addCase(fetchPosts.pending, (state) => {
         state.loading = true;
-        state.error = null;
+        state.error   = null;
       })
       .addCase(fetchPosts.fulfilled, (state, action) => {
         state.loading = false;
-        state.posts = action.payload;
+        const incoming = action.payload.posts || action.payload || [];
+        if (action.meta.arg === 1) {
+          state.posts = incoming;           // fresh load
+        } else {
+          // append for pagination
+          const existingIds = new Set(state.posts.map((p) => p._id));
+          state.posts.push(...incoming.filter((p) => !existingIds.has(p._id)));
+        }
+        state.hasMore = incoming.length >= 10;
+        state.page    = action.meta.arg || 1;
       })
       .addCase(fetchPosts.rejected, (state, action) => {
         state.loading = false;
-        state.error = action.payload;
+        state.error   = action.payload;
       })
-      
-      // Create Post
+
+      // createPost
       .addCase(createPost.pending, (state) => {
-        state.loading = true;
-        state.error = null;
+        state.creating = true;
       })
       .addCase(createPost.fulfilled, (state, action) => {
-        state.loading = false;
-        state.posts.unshift(action.payload);
+        state.creating = false;
+        const newPost  = action.payload.post || action.payload;
+        state.posts.unshift(newPost); // add to top of feed
       })
       .addCase(createPost.rejected, (state, action) => {
-        state.loading = false;
-        state.error = action.payload;
+        state.creating = false;
+        state.error    = action.payload;
       })
-      
-      // Delete Post
+
+      // deletePost
       .addCase(deletePost.fulfilled, (state, action) => {
-        state.posts = state.posts.filter((post) => post._id !== action.payload);
+        state.posts = state.posts.filter((p) => p._id !== action.payload);
       })
-      
-      // Toggle Like
+
+      // toggleLike — backend returns { isLiked, likesCount } not a full post
+      // So we update those two fields on the matching post in state
       .addCase(toggleLike.fulfilled, (state, action) => {
-        const index = state.posts.findIndex((post) => post._id === action.payload._id);
-        if (index !== -1) {
-          state.posts[index] = action.payload;
+        const { isLiked, likesCount } = action.payload;
+        const postId = action.meta.arg; // postId was passed as the thunk argument
+        const post   = state.posts.find((p) => p._id === postId);
+        if (post) {
+          post.isLiked    = isLiked;
+          post.likesCount = likesCount;
         }
       })
-      
-      // Add Comment
+
+      // addComment — add comment to the right post
       .addCase(addComment.fulfilled, (state, action) => {
-        const index = state.posts.findIndex((post) => post._id === action.payload.postId);
-        if (index !== -1) {
-          state.posts[index].comments.push(action.payload.comment);
+        const { postId, comment } = action.payload;
+        const post = state.posts.find((p) => p._id === postId);
+        if (post) {
+          if (!post.comments) post.comments = [];
+          post.comments.push(comment);
+          post.commentsCount = (post.commentsCount || 0) + 1;
         }
       })
-      
-      // Delete Comment
-      .addCase(deleteComment.fulfilled, (state, action) => {
-        const postIndex = state.posts.findIndex((post) => post._id === action.payload.postId);
-        if (postIndex !== -1) {
-          state.posts[postIndex].comments = state.posts[postIndex].comments.filter(
-            (comment) => comment._id !== action.payload.commentId
-          );
-        }
+
+      // fetchComments — attach to post
+      .addCase(fetchComments.fulfilled, (state, action) => {
+        const { postId, comments } = action.payload;
+        const post = state.posts.find((p) => p._id === postId);
+        if (post) post.comments = comments;
       });
   },
 });
 
-export const { clearError } = feedSlice.actions;
+export const { resetFeed, clearError } = feedSlice.actions;
 export default feedSlice.reducer;

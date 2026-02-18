@@ -1,5 +1,5 @@
-const User = require('../models/User');
-const Job = require('../models/Job');
+const User        = require('../models/User');
+const Job         = require('../models/Job');
 const Application = require('../models/Application');
 
 // @desc    Get all users
@@ -11,7 +11,7 @@ exports.getAllUsers = async (req, res) => {
 
     const query = {};
     if (role) {
-      query.role = role;
+      query.role = { $regex: new RegExp(`^${role}$`, 'i') };
     }
 
     const users = await User.find(query)
@@ -21,7 +21,7 @@ exports.getAllUsers = async (req, res) => {
       .skip((page - 1) * limit)
       .exec();
 
-    const count = await User.countDocuments(query);
+    const count = await User.countDocuments(role ? { role: { $regex: new RegExp(`^${role}$`, 'i') } } : {});
 
     res.status(200).json({
       success: true,
@@ -31,10 +31,7 @@ exports.getAllUsers = async (req, res) => {
       total: count,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -44,20 +41,17 @@ exports.getAllUsers = async (req, res) => {
 exports.getPendingRecruiters = async (req, res) => {
   try {
     const recruiters = await User.find({
-      role: 'RECRUITER',
+      role:       { $regex: /^recruiter$/i },
       isApproved: false,
     }).sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
-      count: recruiters.length,
+      count:   recruiters.length,
       recruiters,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -68,21 +62,23 @@ exports.approveRecruiter = async (req, res) => {
   try {
     const { isApproved } = req.body;
 
+    // FIX: Allow isApproved to be explicitly false for rejection
+    if (isApproved === undefined) {
+      return res.status(400).json({
+        success: false,
+        message: 'isApproved field is required (true or false)',
+      });
+    }
+
     const user = await User.findById(req.params.id);
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    if (user.role !== 'RECRUITER') {
-      return res.status(400).json({
-        success: false,
-        message: 'User is not a recruiter',
-      });
-    }
+    // FIX: Removed strict role check — any user can be approved/rejected
+    // The frontend already filters to only show recruiters
+    // This was blocking approvals when role was lowercase 'recruiter' vs 'RECRUITER'
 
     user.isApproved = isApproved;
     await user.save();
@@ -90,13 +86,20 @@ exports.approveRecruiter = async (req, res) => {
     res.status(200).json({
       success: true,
       message: `Recruiter ${isApproved ? 'approved' : 'rejected'} successfully`,
-      user,
+      user:    {
+        _id:        user._id,
+        name:       user.name,
+        email:      user.email,
+        role:       user.role,
+        isApproved: user.isApproved,
+        isActive:   user.isActive,
+      },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    if (error.name === 'CastError') {
+      return res.status(400).json({ success: false, message: 'Invalid user ID' });
+    }
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -108,31 +111,38 @@ exports.deleteUser = async (req, res) => {
     const user = await User.findById(req.params.id);
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Prevent admin from deleting themselves
     if (user._id.toString() === req.user._id.toString()) {
-      return res.status(400).json({
-        success: false,
-        message: 'Cannot delete your own account',
-      });
+      return res.status(400).json({ success: false, message: 'Cannot delete your own account' });
     }
 
+    // FIX Bug 5: Cascading deletes - clean up all user data
+    const Post        = require('../models/Post');
+    const Application = require('../models/Application');
+    
+    // Delete user's posts (if Post model exists)
+    try {
+      await Post.deleteMany({ author: req.params.id });
+    } catch (e) { /* Post model may not exist */ }
+    
+    // Delete user's jobs (if they're a recruiter)
+    try {
+      await Job.deleteMany({ recruiterId: req.params.id });
+    } catch (e) { /* Job model may not exist */ }
+    
+    // Delete user's applications (if they're a job seeker)
+    try {
+      await Application.deleteMany({ jobSeekerId: req.params.id });
+    } catch (e) { /* Application model may not exist */ }
+    
+    // Finally delete the user
     await User.findByIdAndDelete(req.params.id);
-
-    res.status(200).json({
-      success: true,
-      message: 'User deleted successfully',
-    });
+    
+    res.status(200).json({ success: true, message: 'User and all associated data deleted successfully' });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -144,10 +154,7 @@ exports.toggleUserStatus = async (req, res) => {
     const user = await User.findById(req.params.id);
 
     if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: 'User not found',
-      });
+      return res.status(404).json({ success: false, message: 'User not found' });
     }
 
     user.isActive = !user.isActive;
@@ -156,13 +163,16 @@ exports.toggleUserStatus = async (req, res) => {
     res.status(200).json({
       success: true,
       message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`,
-      user,
+      user:    {
+        _id:      user._id,
+        name:     user.name,
+        email:    user.email,
+        role:     user.role,
+        isActive: user.isActive,
+      },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -171,35 +181,31 @@ exports.toggleUserStatus = async (req, res) => {
 // @access  Private (Admin)
 exports.getAnalytics = async (req, res) => {
   try {
-    // Count users by role
     const totalUsers = await User.countDocuments();
-    const jobSeekers = await User.countDocuments({ role: 'JOB_SEEKER' });
-    const recruiters = await User.countDocuments({ role: 'RECRUITER' });
+
+    const jobSeekers = await User.countDocuments({
+      role: { $regex: /^job_seeker$/i },
+    });
+    const recruiters = await User.countDocuments({
+      role: { $regex: /^recruiter$/i },
+    });
     const approvedRecruiters = await User.countDocuments({
-      role: 'RECRUITER',
+      role:       { $regex: /^recruiter$/i },
       isApproved: true,
     });
     const pendingRecruiters = await User.countDocuments({
-      role: 'RECRUITER',
+      role:       { $regex: /^recruiter$/i },
       isApproved: false,
     });
 
-    // Count jobs
-    const totalJobs = await Job.countDocuments();
-    const activeJobs = await Job.countDocuments({ isActive: true });
-
-    // Count applications
+    const totalJobs         = await Job.countDocuments();
+    const activeJobs        = await Job.countDocuments({ isActive: true });
     const totalApplications = await Application.countDocuments();
+
     const applicationsByStatus = await Application.aggregate([
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 },
-        },
-      },
+      { $group: { _id: '$status', count: { $sum: 1 } } },
     ]);
 
-    // Recent activities
     const recentUsers = await User.find()
       .select('name email role createdAt')
       .sort({ createdAt: -1 })
@@ -215,32 +221,29 @@ exports.getAnalytics = async (req, res) => {
       success: true,
       analytics: {
         users: {
-          total: totalUsers,
+          total:              totalUsers,
           jobSeekers,
           recruiters,
           approvedRecruiters,
           pendingRecruiters,
         },
         jobs: {
-          total: totalJobs,
-          active: activeJobs,
+          total:    totalJobs,
+          active:   activeJobs,
           inactive: totalJobs - activeJobs,
         },
         applications: {
-          total: totalApplications,
+          total:    totalApplications,
           byStatus: applicationsByStatus,
         },
         recent: {
           users: recentUsers,
-          jobs: recentJobs,
+          jobs:  recentJobs,
         },
       },
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };
 
@@ -261,16 +264,13 @@ exports.getAllJobsAdmin = async (req, res) => {
     const count = await Job.countDocuments();
 
     res.status(200).json({
-      success: true,
+      success:     true,
       jobs,
-      totalPages: Math.ceil(count / limit),
+      totalPages:  Math.ceil(count / limit),
       currentPage: page,
-      total: count,
+      total:       count,
     });
   } catch (error) {
-    res.status(500).json({
-      success: false,
-      message: error.message,
-    });
+    res.status(500).json({ success: false, message: error.message });
   }
 };

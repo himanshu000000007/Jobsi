@@ -16,6 +16,12 @@ const applicationSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    // ✅ FIX: Added resumeId to properly reference Resume document
+    resumeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Resume',
+      default: null,
+    },
     coverLetter: {
       type: String,
       default: '',
@@ -45,9 +51,7 @@ const applicationSchema = new mongoose.Schema(
       },
     }],
   },
-  {
-    timestamps: true,
-  }
+  { timestamps: true }
 );
 
 // Compound index to prevent duplicate applications

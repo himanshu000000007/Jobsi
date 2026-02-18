@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { store } from '../redux/store';          // your Redux store
+import { store }       from '../redux/store';
 import { forceLogout } from '../redux/slices/authSlice';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
@@ -10,8 +10,7 @@ const api = axios.create({
 });
 
 // ─── Request Interceptor ─────────────────────────────────────────────────────
-// Automatically attach the Bearer token from Redux state to every request.
-// Reading from Redux (not localStorage) keeps a single source of truth.
+// Auto-attach Bearer token from Redux to every request
 api.interceptors.request.use(
   (config) => {
     const token = store.getState().auth.token;
@@ -23,22 +22,17 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 );
 
-// ─── Response Interceptor ────────────────────────────────────────────────────
-// FIX #2: When the server responds with 401 (token expired / invalid),
-// dispatch forceLogout which clears BOTH Redux state AND localStorage.
-//
-// Previously, only localStorage was cleared here, so the Redux store kept the
-// old user object — giving a "zombie login" where the UI looked logged-in but
-// every API call silently failed.
+// ─── Response Interceptor ─────────────────────────────────────────────────────
+// FIX: On 401 — clear BOTH Redux store AND localStorage, then redirect.
+// Previously only localStorage was cleared leaving a zombie login state where
+// the UI showed the user as logged in but every API call failed silently.
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      // Clear Redux store + localStorage in one atomic action
-      store.dispatch(forceLogout());
+      store.dispatch(forceLogout()); // clears Redux + localStorage atomically
 
-      // Redirect to login without relying on React Router
-      // (we're outside of a component here)
+      // Redirect outside of React component context
       if (window.location.pathname !== '/login') {
         window.location.href = '/login';
       }

@@ -1,13 +1,13 @@
-import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import axios from "axios";
+import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
+import axios from 'axios';
 
-const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 const getStoredUser = () => {
   try {
-    const user = localStorage.getItem("user");
-    if (!user || user === "undefined") return null;
+    const user = localStorage.getItem('user');
+    if (!user || user === 'undefined') return null;
     return JSON.parse(user);
   } catch {
     return null;
@@ -15,79 +15,81 @@ const getStoredUser = () => {
 };
 
 const storedUser  = getStoredUser();
-const storedToken = localStorage.getItem("token");
+const storedToken = localStorage.getItem('token');
 
-// ─── Initial State ────────────────────────────────────────────────────────────
+// ─── Initial State ─────────────────────────────────────────────────────────────
 const initialState = {
   user:            storedUser  || null,
   token:           storedToken || null,
   isError:         false,
   isSuccess:       false,
   isLoading:       false,
-  message:         "",
+  message:         '',
   isAuthenticated: !!storedToken,
 };
 
 // ─── Thunks ───────────────────────────────────────────────────────────────────
 
-// FIX #1: loadUser — called on every app start / page refresh.
-// Uses the token already in Redux (hydrated from localStorage) to fetch
-// fresh user data from the server so Redux store is never stale.
+// FIX: loadUser — called on every app start / page refresh
+// Fetches fresh user data from server so Redux is never stale after hard refresh
 export const loadUser = createAsyncThunk(
-  "auth/loadUser",
+  'auth/loadUser',
   async (_, thunkAPI) => {
     try {
       const token = thunkAPI.getState().auth.token;
-      if (!token) return thunkAPI.rejectWithValue("No token");
+      if (!token) return thunkAPI.rejectWithValue('No token');
 
       const response = await axios.get(`${API_URL}/auth/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
-      // Update localStorage with fresh data
-      localStorage.setItem("user", JSON.stringify(response.data.user));
-      return response.data.user;
+      const user = response.data.user || response.data;
+      localStorage.setItem('user', JSON.stringify(user));
+      return user;
     } catch (error) {
-      // Token is invalid/expired — clear everything
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
-      const message = error.response?.data?.message || error.message;
-      return thunkAPI.rejectWithValue(message);
+      // Token invalid/expired — clear storage
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
 // REGISTER
 export const register = createAsyncThunk(
-  "auth/register",
+  'auth/register',
   async (userData, thunkAPI) => {
     try {
       const response = await axios.post(`${API_URL}/auth/register`, userData);
       return response.data; // { user, token }
     } catch (error) {
-      const message = error.response?.data?.message || error.message;
-      return thunkAPI.rejectWithValue(message);
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
 // LOGIN
 export const login = createAsyncThunk(
-  "auth/login",
+  'auth/login',
   async (userData, thunkAPI) => {
     try {
       const response = await axios.post(`${API_URL}/auth/login`, userData);
       return response.data; // { user, token }
     } catch (error) {
-      const message = error.response?.data?.message || error.message;
-      return thunkAPI.rejectWithValue(message);
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
 // UPDATE PROFILE
 export const updateProfile = createAsyncThunk(
-  "auth/updateProfile",
+  'auth/updateProfile',
   async (profileData, thunkAPI) => {
     try {
       const token = thunkAPI.getState().auth.token;
@@ -98,48 +100,47 @@ export const updateProfile = createAsyncThunk(
       );
       return response.data;
     } catch (error) {
-      const message = error.response?.data?.message || error.message;
-      return thunkAPI.rejectWithValue(message);
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || error.message
+      );
     }
   }
 );
 
-// FIX #2: logout — clears BOTH localStorage AND Redux store.
-// Previously only localStorage was cleared, leaving Redux in a "zombie" state.
-export const logout = createAsyncThunk("auth/logout", async () => {
-  localStorage.removeItem("user");
-  localStorage.removeItem("token");
-  // No return value needed — fulfilled handler clears the store
+// LOGOUT — clears both localStorage AND Redux store
+export const logout = createAsyncThunk('auth/logout', async () => {
+  localStorage.removeItem('user');
+  localStorage.removeItem('token');
 });
 
 // ─── Slice ────────────────────────────────────────────────────────────────────
 export const authSlice = createSlice({
-  name: "auth",
+  name: 'auth',
   initialState,
   reducers: {
     reset: (state) => {
       state.isLoading = false;
       state.isSuccess = false;
       state.isError   = false;
-      state.message   = "";
+      state.message   = '';
     },
-    // FIX #2: Sync action so api.js interceptor can dispatch this directly
-    // without needing to await a thunk. Used when a 401 arrives mid-session.
+    // FIX: Sync action for api.js interceptor to dispatch on 401
+    // Clears Redux store + localStorage atomically without needing a thunk
     forceLogout: (state) => {
       state.user            = null;
       state.token           = null;
       state.isAuthenticated = false;
       state.isLoading       = false;
       state.isError         = false;
-      state.message         = "";
-      localStorage.removeItem("user");
-      localStorage.removeItem("token");
+      state.message         = '';
+      localStorage.removeItem('user');
+      localStorage.removeItem('token');
     },
   },
   extraReducers: (builder) => {
     builder
 
-      // ── loadUser ──────────────────────────────────────────────────────────
+      // ── loadUser ────────────────────────────────────────────────────────────
       .addCase(loadUser.pending, (state) => {
         state.isLoading = true;
       })
@@ -156,7 +157,7 @@ export const authSlice = createSlice({
         state.isAuthenticated = false;
       })
 
-      // ── register ──────────────────────────────────────────────────────────
+      // ── register ────────────────────────────────────────────────────────────
       .addCase(register.pending, (state) => {
         state.isLoading = true;
       })
@@ -166,8 +167,8 @@ export const authSlice = createSlice({
         state.user            = action.payload.user;
         state.token           = action.payload.token;
         state.isAuthenticated = true;
-        localStorage.setItem("user",  JSON.stringify(action.payload.user));
-        localStorage.setItem("token", action.payload.token);
+        localStorage.setItem('user',  JSON.stringify(action.payload.user));
+        localStorage.setItem('token', action.payload.token);
       })
       .addCase(register.rejected, (state, action) => {
         state.isLoading       = false;
@@ -178,7 +179,7 @@ export const authSlice = createSlice({
         state.message         = action.payload;
       })
 
-      // ── login ─────────────────────────────────────────────────────────────
+      // ── login ───────────────────────────────────────────────────────────────
       .addCase(login.pending, (state) => {
         state.isLoading = true;
       })
@@ -188,8 +189,8 @@ export const authSlice = createSlice({
         state.user            = action.payload.user;
         state.token           = action.payload.token;
         state.isAuthenticated = true;
-        localStorage.setItem("user",  JSON.stringify(action.payload.user));
-        localStorage.setItem("token", action.payload.token);
+        localStorage.setItem('user',  JSON.stringify(action.payload.user));
+        localStorage.setItem('token', action.payload.token);
       })
       .addCase(login.rejected, (state, action) => {
         state.isLoading       = false;
@@ -200,7 +201,7 @@ export const authSlice = createSlice({
         state.message         = action.payload;
       })
 
-      // ── updateProfile ─────────────────────────────────────────────────────
+      // ── updateProfile ───────────────────────────────────────────────────────
       .addCase(updateProfile.pending, (state) => {
         state.isLoading = true;
       })
@@ -208,7 +209,7 @@ export const authSlice = createSlice({
         state.isLoading = false;
         state.isSuccess = true;
         state.user      = { ...state.user, ...action.payload };
-        localStorage.setItem("user", JSON.stringify(state.user));
+        localStorage.setItem('user', JSON.stringify(state.user));
       })
       .addCase(updateProfile.rejected, (state, action) => {
         state.isLoading = false;
@@ -216,11 +217,14 @@ export const authSlice = createSlice({
         state.message   = action.payload;
       })
 
-      // ── logout ────────────────────────────────────────────────────────────
+      // ── logout ──────────────────────────────────────────────────────────────
       .addCase(logout.fulfilled, (state) => {
         state.user            = null;
         state.token           = null;
         state.isAuthenticated = false;
+        state.isSuccess       = false;
+        state.isError         = false;
+        state.message         = '';
       });
   },
 });

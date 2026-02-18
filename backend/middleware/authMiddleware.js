@@ -1,7 +1,7 @@
-const jwt = require('jsonwebtoken');
+const jwt  = require('jsonwebtoken');
 const User = require('../models/User');
 
-// Verify JWT Token
+// ─── Verify JWT Token ─────────────────────────────────────────────────────────
 exports.protect = async (req, res, next) => {
   let token;
 
@@ -22,19 +22,14 @@ exports.protect = async (req, res, next) => {
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
     req.user = await User.findById(decoded.id).select('-password');
-    
+
     if (!req.user) {
-      return res.status(401).json({
-        success: false,
-        message: 'User not found',
-      });
+      return res.status(401).json({ success: false, message: 'User not found' });
     }
 
-    if (!req.user.isActive) {
-      return res.status(401).json({
-        success: false,
-        message: 'Account is deactivated',
-      });
+    // Only block if isActive is explicitly false
+    if (req.user.isActive === false) {
+      return res.status(401).json({ success: false, message: 'Account is deactivated' });
     }
 
     next();
@@ -46,22 +41,32 @@ exports.protect = async (req, res, next) => {
   }
 };
 
-// Role-based authorization
+// ─── Role-based Authorization (CASE-INSENSITIVE) ──────────────────────────────
+// FIX: Database mein role lowercase ('admin', 'recruiter', 'job_seeker') ho sakta hai
+// But adminRoutes.js mein authorize('ADMIN') uppercase use hota hai
+// Solution: Case-insensitive comparison + underscore normalization
 exports.authorize = (...roles) => {
   return (req, res, next) => {
-    if (!roles.includes(req.user.role)) {
+    // Normalize both sides: uppercase + replace underscore/hyphen with underscore
+    const userRole       = (req.user.role || '').toUpperCase().replace(/[-\s]/g, '_');
+    const allowedRoles   = roles.map((r) => (r || '').toUpperCase().replace(/[-\s]/g, '_'));
+
+    if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({
         success: false,
-        message: `User role ${req.user.role} is not authorized to access this route`,
+        message: `User role "${req.user.role}" is not authorized to access this route`,
       });
     }
     next();
   };
 };
 
-// Check if recruiter is approved
+// ─── Check if Recruiter is Approved ───────────────────────────────────────────
+// FIX: Case-insensitive role check
 exports.checkRecruiterApproval = async (req, res, next) => {
-  if (req.user.role === 'RECRUITER' && !req.user.isApproved) {
+  const userRole = (req.user.role || '').toUpperCase().replace(/[-\s]/g, '_');
+
+  if (userRole === 'RECRUITER' && !req.user.isApproved) {
     return res.status(403).json({
       success: false,
       message: 'Your recruiter account is pending approval from admin',
