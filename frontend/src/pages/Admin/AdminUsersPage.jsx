@@ -6,12 +6,17 @@ import api     from '../../services/api';
 import toast   from 'react-hot-toast';
 
 const AdminUsersPage = () => {
-  const { user }             = useSelector((state) => state.auth);
-  const [users,    setUsers]   = useState([]);
-  const [loading,  setLoading] = useState(true);
-  const [error,    setError]   = useState(null);
+  const { user } = useSelector((state) => state.auth);
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers();
+    // ✅ FIX BUG 3: Removed event listener
+    // Old code: window.addEventListener('adminUserUpdated', fetchUsers)
+    // This caused double API calls on every approve/reject
+  }, []);
 
   const fetchUsers = async () => {
     try {
@@ -47,26 +52,21 @@ const AdminUsersPage = () => {
     }
   };
 
-  // FIX Bug 2: correct API endpoint + payload for recruiter approval
-  // Backend expects: PUT /api/admin/recruiters/:id/approve  { isApproved: true/false }
+  // ✅ FIX BUG 3: Only fetchUsers() once - removed event dispatch
   const handleApproveRecruiter = async (recruiterId, approve) => {
     try {
       await api.put(`/admin/recruiters/${recruiterId}/approve`, { isApproved: approve });
       toast.success(approve ? '✅ Recruiter approved!' : '❌ Recruiter rejected');
-      fetchUsers(); // refresh list
+      fetchUsers(); // Single API call
+      // ✅ REMOVED: window.dispatchEvent(new CustomEvent('adminUserUpdated'))
     } catch (err) {
       console.error('Approve error:', err.response?.data);
       toast.error(err.response?.data?.message || 'Action failed');
     }
   };
 
-  // FIX Bug 2: role comparison — backend stores 'RECRUITER' (uppercase)
-  // Check both cases to be safe
-  const isRecruiter = (u) =>
-    u.role?.toUpperCase() === 'RECRUITER';
-
-  const isPendingRecruiter = (u) =>
-    isRecruiter(u) && !u.isApproved;
+  const isRecruiter = (u) => u.role?.toUpperCase() === 'RECRUITER';
+  const isPendingRecruiter = (u) => isRecruiter(u) && !u.isApproved;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -78,7 +78,6 @@ const AdminUsersPage = () => {
             <div className="flex justify-between items-center mb-8">
               <h1 className="text-3xl font-bold text-gray-800">Manage Users</h1>
               <div className="flex gap-3">
-                {/* Pending badge */}
                 {users.filter(isPendingRecruiter).length > 0 && (
                   <span className="bg-yellow-100 text-yellow-800 text-sm font-semibold px-3 py-1.5 rounded-full">
                     ⏳ {users.filter(isPendingRecruiter).length} Pending Approval
@@ -99,7 +98,7 @@ const AdminUsersPage = () => {
               </div>
             ) : (
               <>
-                {/* Pending Recruiters — highlighted section at top */}
+                {/* Pending Recruiters Section */}
                 {users.filter(isPendingRecruiter).length > 0 && (
                   <div className="mb-6 bg-yellow-50 border border-yellow-200 rounded-xl p-4">
                     <h2 className="text-sm font-semibold text-yellow-800 mb-3">⏳ Recruiters Awaiting Approval</h2>
@@ -176,7 +175,6 @@ const AdminUsersPage = () => {
                               >
                                 {u.isActive ? 'Deactivate' : 'Activate'}
                               </button>
-                              {/* FIX: show approve/reject for ALL pending recruiters */}
                               {isPendingRecruiter(u) && (
                                 <>
                                   <button

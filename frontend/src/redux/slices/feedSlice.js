@@ -10,8 +10,9 @@ export const fetchPosts = createAsyncThunk(
     try {
       return await feedService.getPosts(page);
     } catch (error) {
+      // ✅ Standardized error handling
       return thunkAPI.rejectWithValue(
-        error.response?.data?.message || error.message
+        error.response?.data?.message || error.message || 'Failed to fetch posts'
       );
     }
   }
@@ -23,8 +24,9 @@ export const createPost = createAsyncThunk(
     try {
       return await feedService.createPost(postData);
     } catch (error) {
+      // ✅ Standardized error handling
       return thunkAPI.rejectWithValue(
-        error.response?.data?.message || error.message
+        error.response?.data?.message || error.message || 'Failed to create post'
       );
     }
   }
@@ -37,8 +39,9 @@ export const deletePost = createAsyncThunk(
       await feedService.deletePost(postId);
       return postId;
     } catch (error) {
+      // ✅ Standardized error handling
       return thunkAPI.rejectWithValue(
-        error.response?.data?.message || error.message
+        error.response?.data?.message || error.message || 'Failed to delete post'
       );
     }
   }
@@ -50,8 +53,9 @@ export const toggleLike = createAsyncThunk(
     try {
       return await feedService.toggleLike(postId);
     } catch (error) {
+      // ✅ Standardized error handling
       return thunkAPI.rejectWithValue(
-        error.response?.data?.message || error.message
+        error.response?.data?.message || error.message || 'Failed to toggle like'
       );
     }
   }
@@ -64,8 +68,9 @@ export const addComment = createAsyncThunk(
       const data = await feedService.addComment(postId, content);
       return { postId, comment: data.comment || data };
     } catch (error) {
+      // ✅ Standardized error handling
       return thunkAPI.rejectWithValue(
-        error.response?.data?.message || error.message
+        error.response?.data?.message || error.message || 'Failed to add comment'
       );
     }
   }
@@ -78,8 +83,9 @@ export const fetchComments = createAsyncThunk(
       const data = await feedService.getComments(postId);
       return { postId, comments: data.comments || data };
     } catch (error) {
+      // ✅ Standardized error handling
       return thunkAPI.rejectWithValue(
-        error.response?.data?.message || error.message
+        error.response?.data?.message || error.message || 'Failed to fetch comments'
       );
     }
   }
@@ -117,15 +123,23 @@ const feedSlice = createSlice({
       .addCase(fetchPosts.fulfilled, (state, action) => {
         state.loading = false;
         const incoming = action.payload.posts || action.payload || [];
-        if (action.meta.arg === 1) {
-          state.posts = incoming;           // fresh load
+        
+        // ✅ FIX BUG: Use nullish coalescing to handle undefined arg
+        // When dispatch(fetchPosts()) is called without args, action.meta.arg is undefined
+        // Default to 1 using ?? operator
+        const requestedPage = action.meta.arg ?? 1;
+        
+        if (requestedPage === 1) {
+          // Fresh load - replace all posts
+          state.posts = incoming;
         } else {
-          // append for pagination
+          // Pagination - append new posts
           const existingIds = new Set(state.posts.map((p) => p._id));
           state.posts.push(...incoming.filter((p) => !existingIds.has(p._id)));
         }
+        
         state.hasMore = incoming.length >= 10;
-        state.page    = action.meta.arg || 1;
+        state.page    = requestedPage;
       })
       .addCase(fetchPosts.rejected, (state, action) => {
         state.loading = false;
@@ -150,9 +164,11 @@ const feedSlice = createSlice({
       .addCase(deletePost.fulfilled, (state, action) => {
         state.posts = state.posts.filter((p) => p._id !== action.payload);
       })
+      .addCase(deletePost.rejected, (state, action) => {
+        state.error = action.payload;
+      })
 
-      // toggleLike — backend returns { isLiked, likesCount } not a full post
-      // So we update those two fields on the matching post in state
+      // toggleLike — backend returns { isLiked, likesCount }
       .addCase(toggleLike.fulfilled, (state, action) => {
         const { isLiked, likesCount } = action.payload;
         const postId = action.meta.arg; // postId was passed as the thunk argument
@@ -162,8 +178,11 @@ const feedSlice = createSlice({
           post.likesCount = likesCount;
         }
       })
+      .addCase(toggleLike.rejected, (state, action) => {
+        state.error = action.payload;
+      })
 
-      // addComment — add comment to the right post
+      // addComment
       .addCase(addComment.fulfilled, (state, action) => {
         const { postId, comment } = action.payload;
         const post = state.posts.find((p) => p._id === postId);
@@ -173,12 +192,18 @@ const feedSlice = createSlice({
           post.commentsCount = (post.commentsCount || 0) + 1;
         }
       })
+      .addCase(addComment.rejected, (state, action) => {
+        state.error = action.payload;
+      })
 
-      // fetchComments — attach to post
+      // fetchComments
       .addCase(fetchComments.fulfilled, (state, action) => {
         const { postId, comments } = action.payload;
         const post = state.posts.find((p) => p._id === postId);
         if (post) post.comments = comments;
+      })
+      .addCase(fetchComments.rejected, (state, action) => {
+        state.error = action.payload;
       });
   },
 });

@@ -1,6 +1,4 @@
-// Backend Auth Controller - Add this to your existing authController.js
-// Or create it if it doesn't exist
-
+// backend/controllers/authController.js
 const asyncHandler = require('express-async-handler');
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
@@ -12,39 +10,50 @@ const bcrypt = require('bcryptjs');
  * @access  Public
  */
 const registerUser = asyncHandler(async (req, res) => {
-  const { name, email, password, role } = req.body;
+  const { name, email, password, role, phone, companyName } = req.body;
 
   if (!name || !email || !password) {
     res.status(400);
     throw new Error('Please provide all required fields');
   }
 
-  // Check if user exists
+  if (role === 'recruiter' && !companyName) {
+    res.status(400);
+    throw new Error('Company name is required for recruiters');
+  }
+
   const userExists = await User.findOne({ email });
   if (userExists) {
     res.status(400);
     throw new Error('User already exists');
   }
 
-  // Hash password
   const salt = await bcrypt.genSalt(10);
   const hashedPassword = await bcrypt.hash(password, salt);
 
-  // Create user
   const user = await User.create({
     name,
     email,
     password: hashedPassword,
     role: role || 'jobseeker',
+    phone,
+    companyName,
   });
 
   if (user) {
     res.status(201).json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
+      success: true,
       token: generateToken(user._id),
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        companyName: user.companyName,
+        isApproved: user.isApproved,
+        isActive: user.isActive,
+      },
     });
   } else {
     res.status(400);
@@ -60,47 +69,98 @@ const registerUser = asyncHandler(async (req, res) => {
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
 
-  // Check for user email
+  console.log('🔍 Login attempt:', { email }); // Debug log
+
   const user = await User.findOne({ email });
+  
+  console.log('👤 User found:', user ? 'YES' : 'NO'); // Debug log
+  if (user) {
+    console.log('🔐 Stored hash:', user.password.substring(0, 20) + '...'); // Debug log
+  }
 
   if (user && (await bcrypt.compare(password, user.password))) {
+    console.log('✅ Password match!'); // Debug log
+    
     res.json({
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      phone: user.phone,
-      location: user.location,
-      title: user.title,
-      bio: user.bio,
-      linkedin: user.linkedin,
-      github: user.github,
-      portfolio: user.portfolio,
-      skills: user.skills,
-      experience: user.experience,
-      education: user.education,
-      companyName: user.companyName,
-      companyWebsite: user.companyWebsite,
-      companySize: user.companySize,
-      industry: user.industry,
+      success: true,
       token: generateToken(user._id),
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        location: user.location,
+        title: user.title,
+        bio: user.bio,
+        avatar: user.avatar,
+        linkedin: user.linkedin,
+        github: user.github,
+        portfolio: user.portfolio,
+        socialLinks: user.socialLinks,
+        skills: user.skills,
+        experience: user.experience,
+        education: user.education,
+        companyName: user.companyName,
+        companyWebsite: user.companyWebsite,
+        companyLogo: user.companyLogo,
+        companyDescription: user.companyDescription,
+        companySize: user.companySize,
+        industry: user.industry,
+        position: user.position,
+        isApproved: user.isApproved,
+        isActive: user.isActive,
+      },
     });
   } else {
+    console.log('❌ Password mismatch or user not found'); // Debug log
     res.status(401);
     throw new Error('Invalid credentials');
   }
 });
 
 /**
- * @desc    Get user profile
- * @route   GET /api/auth/profile
+ * @desc    Get user profile (for /api/auth/me endpoint)
+ * @route   GET /api/auth/me
  * @access  Private
  */
 const getProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select('-password');
 
   if (user) {
-    res.json(user);
+    res.json({
+      success: true,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        phone: user.phone,
+        location: user.location,
+        title: user.title,
+        bio: user.bio,
+        avatar: user.avatar,
+        linkedin: user.linkedin,
+        github: user.github,
+        portfolio: user.portfolio,
+        socialLinks: user.socialLinks,
+        skills: user.skills,
+        experience: user.experience,
+        education: user.education,
+        companyName: user.companyName,
+        companyWebsite: user.companyWebsite,
+        companyLogo: user.companyLogo,
+        companyDescription: user.companyDescription,
+        companySize: user.companySize,
+        industry: user.industry,
+        position: user.position,
+        isApproved: user.isApproved,
+        isActive: user.isActive,
+        isVerified: user.isVerified,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
+    });
   } else {
     res.status(404);
     throw new Error('User not found');
@@ -120,53 +180,53 @@ const updateProfile = asyncHandler(async (req, res) => {
     throw new Error('User not found');
   }
 
-  // Update fields based on user role
-  user.name = req.body.name || user.name;
-  user.phone = req.body.phone || user.phone;
-  user.location = req.body.location || user.location;
-  user.title = req.body.title || user.title;
-  user.bio = req.body.bio || user.bio;
+  // WHITELIST: Only these fields can be updated by users
+  const allowedFields = [
+    'name', 'phone', 'location', 'title', 'bio', 'avatar',
+    'linkedin', 'github', 'portfolio', 'socialLinks',
+    'skills', 'experience', 'education',
+    'companyName', 'companyWebsite', 'companyLogo', 
+    'companyDescription', 'companySize', 'industry', 'position'
+  ];
 
-  // Job seeker specific fields
-  if (user.role === 'jobseeker') {
-    user.linkedin = req.body.linkedin || user.linkedin;
-    user.github = req.body.github || user.github;
-    user.portfolio = req.body.portfolio || user.portfolio;
-    user.skills = req.body.skills || user.skills;
-    user.experience = req.body.experience || user.experience;
-    user.education = req.body.education || user.education;
-  }
-
-  // Recruiter specific fields
-  if (user.role === 'recruiter') {
-    user.companyName = req.body.companyName || user.companyName;
-    user.companyWebsite = req.body.companyWebsite || user.companyWebsite;
-    user.companySize = req.body.companySize || user.companySize;
-    user.industry = req.body.industry || user.industry;
-    user.linkedin = req.body.linkedin || user.linkedin;
-  }
+  // Only update allowed fields that are present in request
+  allowedFields.forEach(field => {
+    if (req.body[field] !== undefined) {
+      user[field] = req.body[field];
+    }
+  });
 
   const updatedUser = await user.save();
 
   res.json({
-    _id: updatedUser._id,
-    name: updatedUser.name,
-    email: updatedUser.email,
-    role: updatedUser.role,
-    phone: updatedUser.phone,
-    location: updatedUser.location,
-    title: updatedUser.title,
-    bio: updatedUser.bio,
-    linkedin: updatedUser.linkedin,
-    github: updatedUser.github,
-    portfolio: updatedUser.portfolio,
-    skills: updatedUser.skills,
-    experience: updatedUser.experience,
-    education: updatedUser.education,
-    companyName: updatedUser.companyName,
-    companyWebsite: updatedUser.companyWebsite,
-    companySize: updatedUser.companySize,
-    industry: updatedUser.industry,
+    success: true,
+    user: {
+      _id: updatedUser._id,
+      name: updatedUser.name,
+      email: updatedUser.email,
+      role: updatedUser.role,
+      phone: updatedUser.phone,
+      location: updatedUser.location,
+      title: updatedUser.title,
+      bio: updatedUser.bio,
+      avatar: updatedUser.avatar,
+      linkedin: updatedUser.linkedin,
+      github: updatedUser.github,
+      portfolio: updatedUser.portfolio,
+      socialLinks: updatedUser.socialLinks,
+      skills: updatedUser.skills,
+      experience: updatedUser.experience,
+      education: updatedUser.education,
+      companyName: updatedUser.companyName,
+      companyWebsite: updatedUser.companyWebsite,
+      companyLogo: updatedUser.companyLogo,
+      companyDescription: updatedUser.companyDescription,
+      companySize: updatedUser.companySize,
+      industry: updatedUser.industry,
+      position: updatedUser.position,
+      isApproved: updatedUser.isApproved,
+      isActive: updatedUser.isActive,
+    },
   });
 });
 

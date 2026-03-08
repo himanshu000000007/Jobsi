@@ -81,7 +81,7 @@ const Register = () => {
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Role Selection */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
+            <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
               I am a
             </label>
             <div className="grid grid-cols-2 gap-4">
@@ -94,8 +94,8 @@ const Register = () => {
                     : 'border-gray-200 hover:border-primary-300'
                 }`}
               >
-                <p className="font-semibold">Job Seeker</p>
-                <p className="text-sm text-gray-600">Looking for jobs</p>
+                <p className="font-semibold" style={{ color: '#1f2937' }}>Job Seeker</p>
+                <p className="text-sm" style={{ color: '#4b5563' }}>Looking for jobs</p>
               </button>
               <button
                 type="button"
@@ -106,8 +106,8 @@ const Register = () => {
                     : 'border-gray-200 hover:border-primary-300'
                 }`}
               >
-                <p className="font-semibold">Recruiter</p>
-                <p className="text-sm text-gray-600">Hiring talent</p>
+                <p className="font-semibold" style={{ color: '#1f2937' }}>Recruiter</p>
+                <p className="text-sm" style={{ color: '#4b5563' }}>Hiring talent</p>
               </button>
             </div>
           </div>
@@ -115,7 +115,7 @@ const Register = () => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {/* Name */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
                 Full Name
               </label>
               <div className="relative">
@@ -126,6 +126,7 @@ const Register = () => {
                   value={formData.name}
                   onChange={handleChange}
                   className="input-field pl-10"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   placeholder="John Doe"
                   required
                 />
@@ -134,7 +135,7 @@ const Register = () => {
 
             {/* Email */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
                 Email Address
               </label>
               <div className="relative">
@@ -145,6 +146,7 @@ const Register = () => {
                   value={formData.email}
                   onChange={handleChange}
                   className="input-field pl-10"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   placeholder="your@email.com"
                   required
                 />
@@ -153,7 +155,7 @@ const Register = () => {
 
             {/* Phone */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
                 Phone Number
               </label>
               <div className="relative">
@@ -164,6 +166,7 @@ const Register = () => {
                   value={formData.phone}
                   onChange={handleChange}
                   className="input-field pl-10"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   placeholder="+1234567890"
                 />
               </div>
@@ -172,7 +175,7 @@ const Register = () => {
             {/* Company Name (if recruiter) */}
             {formData.role === 'recruiter' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
                   Company Name
                 </label>
                 <div className="relative">
@@ -183,6 +186,7 @@ const Register = () => {
                     value={formData.companyName}
                     onChange={handleChange}
                     className="input-field pl-10"
+                    style={{ color: '#111827', backgroundColor: '#ffffff' }}
                     placeholder="Acme Inc."
                     required={formData.role === 'recruiter'}
                   />
@@ -192,7 +196,7 @@ const Register = () => {
 
             {/* Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
                 Password
               </label>
               <div className="relative">
@@ -203,6 +207,7 @@ const Register = () => {
                   value={formData.password}
                   onChange={handleChange}
                   className="input-field pl-10"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   placeholder="••••••••"
                   required
                 />
@@ -211,7 +216,7 @@ const Register = () => {
 
             {/* Confirm Password */}
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium mb-2" style={{ color: '#374151' }}>
                 Confirm Password
               </label>
               <div className="relative">
@@ -222,6 +227,7 @@ const Register = () => {
                   value={formData.confirmPassword}
                   onChange={handleChange}
                   className="input-field pl-10"
+                  style={{ color: '#111827', backgroundColor: '#ffffff' }}
                   placeholder="••••••••"
                   required
                 />
@@ -239,7 +245,7 @@ const Register = () => {
         </form>
 
         <div className="mt-6 text-center">
-          <p className="text-gray-600">
+          <p style={{ color: '#4b5563' }}>
             Already have an account?{' '}
             <Link to="/login" className="text-primary-600 hover:text-primary-700 font-semibold">
               Sign in

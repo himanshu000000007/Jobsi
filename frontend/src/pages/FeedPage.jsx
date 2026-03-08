@@ -1,5 +1,5 @@
 // frontend/src/pages/FeedPage.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import {
   fetchPosts, createPost, deletePost,
@@ -197,7 +197,7 @@ const CreatePostBox = ({ user }) => {
   const [image,    setImage]    = useState(null);
   const [preview,  setPreview]  = useState(null);
   const [expanded, setExpanded] = useState(false);
-  const fileInputRef = React.useRef(null);
+  const fileInputRef = useRef(null);
 
   const handleImageSelect = (e) => {
     const file = e.target.files?.[0];

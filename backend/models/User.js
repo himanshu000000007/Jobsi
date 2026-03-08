@@ -1,5 +1,5 @@
-// Backend User Model - Updated with profile fields
-// Place this file in: backend/models/User.js
+ // backend/models/User.js
+// FIXED: Consistent role handling + added isApproved field
 
 const mongoose = require('mongoose');
 
@@ -16,19 +16,19 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
       lowercase: true,
-    },
+    },//
     password: {
       type: String,
       required: [true, 'Please add a password'],
       minlength: 6,
     },
     role: {
-  type: String,
-  enum: ['jobseeker', 'recruiter', 'admin'],
-  default: 'jobseeker',
-  // ✅ Always lowercase store karo
-  set: (val) => val?.toLowerCase(),
-},
+      type: String,
+      enum: ['jobseeker', 'recruiter', 'admin'],
+      default: 'jobseeker',
+      // Always store lowercase for consistency
+      set: (val) => val?.toLowerCase().replace('_', ''),
+    },
     
     // Common profile fields
     phone: {
@@ -66,25 +66,48 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    socialLinks: {
+      linkedin: { type: String, trim: true },
+      github: { type: String, trim: true },
+      portfolio: { type: String, trim: true },
+    },
     skills: [{
       type: String,
       trim: true,
     }],
-    experience: {
-      type: String,
-      trim: true,
-    },
-    education: {
-      type: String,
-      trim: true,
-    },
+    experience: [{
+      title: String,
+      company: String,
+      startDate: String,
+      endDate: String,
+      current: Boolean,
+      description: String,
+    }],
+    education: [{
+      degree: String,
+      institution: String,
+      startDate: String,
+      endDate: String,
+      gpa: String,
+    }],
 
     // Recruiter specific fields
- companyName: {
-  type: String,
-  required: function() { return this.role === 'RECRUITER'; },
-},
+    companyName: {
+      type: String,
+      // FIX: Check lowercase since role setter normalizes to lowercase
+      required: function() { 
+        return this.role === 'recruiter'; 
+      },
+    },
     companyWebsite: {
+      type: String,
+      trim: true,
+    },
+    companyLogo: {
+      type: String,
+      default: null,
+    },
+    companyDescription: {
       type: String,
       trim: true,
     },
@@ -97,15 +120,19 @@ const userSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
+    position: {
+      type: String,
+      trim: true,
+    },
 
-companyLogo: {              // ← ADD THIS
-  type: String,
-  default: null,
-},
-companyDescription: {
-  type: String,
-},
-
+    // Recruiter approval status (added for admin approval workflow)
+    isApproved: {
+      type: Boolean,
+      default: function() {
+        // Only recruiters need approval, others are auto-approved
+        return this.role !== 'recruiter';
+      },
+    },
 
     // Account status
     isActive: {
@@ -125,6 +152,7 @@ companyDescription: {
 // Index for faster queries
 userSchema.index({ email: 1 });
 userSchema.index({ role: 1 });
+userSchema.index({ isApproved: 1 });
 
 const User = mongoose.model('User', userSchema);
 

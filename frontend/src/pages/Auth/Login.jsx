@@ -13,9 +13,14 @@ const Login = () => {
   const { isLoading, isAuthenticated, token, user, isError, message } =
     useSelector((state) => state.auth);
 
-  // Redirect once authenticated
+  // ✅ FIX: Only redirect when BOTH token AND user exist
+  // This prevents blank dashboard on fresh login
   useEffect(() => {
     if (isAuthenticated && token && user) {
+      console.log('✅ Login complete - navigating to dashboard', { 
+        user: user.name, 
+        role: user.role 
+      });
       navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, token, user, navigate]);
@@ -35,11 +40,13 @@ const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await dispatch(login(formData)).unwrap();
+      // ✅ FIX: Wait for login to complete and user data to populate
+      const result = await dispatch(login(formData)).unwrap();
+      console.log('✅ Login API success:', result);
       toast.success('Login successful!');
-      // FIX: removed dispatch(reset()) here — it was clearing isSuccess before
-      // the useEffect redirect could fire, causing a flicker
+      // Navigation will happen via useEffect when user is set in Redux
     } catch (error) {
+      console.error('❌ Login failed:', error);
       toast.error(error || 'Login failed. Please check your credentials.');
     }
   };

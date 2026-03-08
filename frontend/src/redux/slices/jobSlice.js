@@ -22,7 +22,10 @@ export const fetchJobs = createAsyncThunk(
       const data = await jobService.getAllJobs(filters);
       return data;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch jobs');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to fetch jobs'
+      );
     }
   }
 );
@@ -34,7 +37,10 @@ export const fetchJobById = createAsyncThunk(
       const data = await jobService.getJobById(id);
       return data.job;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch job');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to fetch job'
+      );
     }
   }
 );
@@ -46,7 +52,10 @@ export const createJob = createAsyncThunk(
       const data = await jobService.createJob(jobData);
       return data.job;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to create job');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to create job'
+      );
     }
   }
 );
@@ -58,7 +67,10 @@ export const updateJob = createAsyncThunk(
       const data = await jobService.updateJob(id, jobData);
       return data.job;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update job');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to update job'
+      );
     }
   }
 );
@@ -70,7 +82,10 @@ export const deleteJob = createAsyncThunk(
       await jobService.deleteJob(id);
       return id;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to delete job');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to delete job'
+      );
     }
   }
 );
@@ -82,7 +97,10 @@ export const fetchMyJobs = createAsyncThunk(
       const data = await jobService.getMyJobs();
       return data.jobs;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch jobs');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to fetch jobs'
+      );
     }
   }
 );
@@ -94,7 +112,10 @@ export const applyForJob = createAsyncThunk(
       const data = await jobService.applyForJob(jobId, applicationData);
       return data.application;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to apply');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to apply'
+      );
     }
   }
 );
@@ -106,7 +127,10 @@ export const fetchJobApplications = createAsyncThunk(
       const data = await jobService.getJobApplications(jobId);
       return data.applications;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch applications');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to fetch applications'
+      );
     }
   }
 );
@@ -118,7 +142,10 @@ export const fetchMyApplications = createAsyncThunk(
       const data = await jobService.getMyApplications();
       return data.applications;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to fetch applications');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to fetch applications'
+      );
     }
   }
 );
@@ -130,7 +157,10 @@ export const updateApplicationStatus = createAsyncThunk(
       const data = await jobService.updateApplicationStatus(applicationId, statusData);
       return data.application;
     } catch (error) {
-      return rejectWithValue(error.response?.data?.message || 'Failed to update status');
+      // ✅ Standardized error handling
+      return rejectWithValue(
+        error.response?.data?.message || error.message || 'Failed to update status'
+      );
     }
   }
 );
@@ -148,8 +178,8 @@ const jobSlice = createSlice({
     },
   },
   extraReducers: (builder) => {
-    // Fetch Jobs
     builder
+      // ─── Fetch Jobs ───
       .addCase(fetchJobs.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -163,10 +193,9 @@ const jobSlice = createSlice({
       .addCase(fetchJobs.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
 
-    // Fetch Job By ID
-    builder
+      // ─── Fetch Job By ID ───
       .addCase(fetchJobById.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -178,10 +207,9 @@ const jobSlice = createSlice({
       .addCase(fetchJobById.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
 
-    // Create Job
-    builder
+      // ─── Create Job ───
       .addCase(createJob.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -193,10 +221,9 @@ const jobSlice = createSlice({
       .addCase(createJob.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
 
-    // Update Job
-    builder
+      // ─── Update Job ───
       .addCase(updateJob.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -211,10 +238,9 @@ const jobSlice = createSlice({
       .addCase(updateJob.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
 
-    // Delete Job
-    builder
+      // ─── Delete Job ───
       .addCase(deleteJob.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -226,10 +252,9 @@ const jobSlice = createSlice({
       .addCase(deleteJob.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
 
-    // Fetch My Jobs
-    builder
+      // ─── Fetch My Jobs ───
       .addCase(fetchMyJobs.pending, (state) => {
         state.loading = true;
         state.error = null;
@@ -241,15 +266,81 @@ const jobSlice = createSlice({
       .addCase(fetchMyJobs.rejected, (state, action) => {
         state.loading = false;
         state.error = action.payload;
-      });
+      })
 
-    // Fetch Applications
-    builder
+      // ─── Apply For Job ───
+      // ✅ FIX BUG 2: Added missing handler for applyForJob
+      .addCase(applyForJob.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(applyForJob.fulfilled, (state, action) => {
+        state.loading = false;
+        // Add the new application to myApplications list
+        state.myApplications.unshift(action.payload);
+      })
+      .addCase(applyForJob.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ─── Fetch Job Applications ───
+      .addCase(fetchJobApplications.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(fetchJobApplications.fulfilled, (state, action) => {
+        state.loading = false;
         state.applications = action.payload;
       })
+      .addCase(fetchJobApplications.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ─── Fetch My Applications ───
+      .addCase(fetchMyApplications.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
       .addCase(fetchMyApplications.fulfilled, (state, action) => {
+        state.loading = false;
         state.myApplications = action.payload;
+      })
+      .addCase(fetchMyApplications.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
+      })
+
+      // ─── Update Application Status ───
+      // ✅ FIX BUG 2: Added missing handler for updateApplicationStatus
+      .addCase(updateApplicationStatus.pending, (state) => {
+        state.loading = true;
+        state.error = null;
+      })
+      .addCase(updateApplicationStatus.fulfilled, (state, action) => {
+        state.loading = false;
+        const updatedApp = action.payload;
+
+        // Update in applications list (recruiter view)
+        const appIndex = state.applications.findIndex(
+          app => app._id === updatedApp._id
+        );
+        if (appIndex !== -1) {
+          state.applications[appIndex] = updatedApp;
+        }
+
+        // Update in myApplications list (job seeker view)
+        const myAppIndex = state.myApplications.findIndex(
+          app => app._id === updatedApp._id
+        );
+        if (myAppIndex !== -1) {
+          state.myApplications[myAppIndex] = updatedApp;
+        }
+      })
+      .addCase(updateApplicationStatus.rejected, (state, action) => {
+        state.loading = false;
+        state.error = action.payload;
       });
   },
 });

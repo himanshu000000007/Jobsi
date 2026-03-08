@@ -23,15 +23,15 @@ import MyApplicationsPage  from './pages/MyApplicationsPage';
 import JobsPage            from './pages/JobsPage';
 import PostJobPage         from './pages/PostJobPage';
 import MyJobsPage          from './pages/MyJobsPage';
-import ProfilePage         from './pages/ProfilePage';
+// ✅ FIX BUG 1: Import role-based ProfilePage from pages/Profile/ProfilePage.jsx
+// NOT the generic ProfilePage.jsx in pages root
+import ProfilePage         from './pages/Profile/ProfilePage';
 import AdminUsersPage      from './pages/Admin/AdminUsersPage';
 import AdminJobsPage       from './pages/Admin/AdminJobsPage';
 import AdminApprovalsPage  from './pages/Admin/AdminApprovalsPage';
 import AdminAnalyticsPage  from './pages/Admin/AdminAnalyticsPage';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-// Normalize role exactly like Sidebar & Navbar: lowercase + strip underscore
-// "JOB_SEEKER" | "job_seeker" | "JOBSEEKER" → "jobseeker"
 const normalizeRole = (role = '') => role.toLowerCase().replace('_', '');
 
 // ─── Protected Route ──────────────────────────────────────────────────────────
@@ -42,7 +42,6 @@ const ProtectedRoute = ({ children }) => {
 };
 
 // ─── Role Guard ───────────────────────────────────────────────────────────────
-// Blocks a route for roles that shouldn't access it
 const RoleRoute = ({ children, allowedRoles }) => {
   const { user } = useSelector((state) => state.auth);
   const role = normalizeRole(user?.role);
@@ -64,7 +63,6 @@ const DashboardRouter = () => {
 
   if (!token) return <Navigate to="/login" replace />;
 
-  // FIX: Never default to a wrong dashboard — wait until user is loaded
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -84,16 +82,10 @@ const DashboardRouter = () => {
 };
 
 // ─── Inner App (inside Router context) ───────────────────────────────────────
-// IMPORTANT: isLoading check must be INSIDE <Router> so that when login fires
-// isLoading=true briefly, the Router stays mounted and navigation to /dashboard
-// is NOT cancelled. Previously the Loader was outside Router — unmounting it
-// killed the pending navigate() call → blank page until manual refresh.
 function AppRoutes() {
   const { token, user, isLoading } = useSelector((state) => state.auth);
   const isAuthenticated = !!token;
 
-  // FIX: Only show loader if loading AND user doesn't exist yet
-  // (prevents blank screen after fresh login when user is already in Redux)
   if (isLoading && !user) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-50">
@@ -114,6 +106,7 @@ function AppRoutes() {
 
       {/* ── Common Protected ── */}
       <Route path="/feed"    element={<ProtectedRoute><FeedPage /></ProtectedRoute>} />
+      {/* ✅ Now routes to role-based profile (JobSeekerProfile/RecruiterProfile/AdminProfile) */}
       <Route path="/profile" element={<ProtectedRoute><ProfilePage /></ProtectedRoute>} />
 
       {/* ── Job Seeker Only ── */}
@@ -154,9 +147,6 @@ function App() {
   const dispatch = useDispatch();
   const { token, user } = useSelector((state) => state.auth);
 
-  // On app start / page refresh, re-fetch user from server
-  // FIX: Only call loadUser if token exists BUT user is missing
-  // (don't call after fresh login when user is already in Redux)
   useEffect(() => {
     if (token && !user) {
       dispatch(loadUser());
@@ -174,7 +164,6 @@ function App() {
           error:   { duration: 4000, iconTheme: { primary: '#ef4444', secondary: '#fff' } },
         }}
       />
-      {/* AppRoutes is INSIDE Router — isLoading won't unmount the Router */}
       <AppRoutes />
     </Router>
   );
