@@ -22,7 +22,7 @@ const seedAdmin = async () => {
 
     const admin = await User.create({
       name: 'Admin',
-      email: process.env.ADMIN_EMAIL || 'admin@jobportal.com',
+      email: process.env.ADMIN_EMAIL || 'himanshubhukar@jobportal.com',
       password: hashedPassword, // ✅ store the hash, not plain text
       role: 'admin',            // ✅ lowercase to match enum
       isActive: true,
